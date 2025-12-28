@@ -1,0 +1,8 @@
+{
+  "name": "LuminaHealth Hospital",
+  "description": "A modern, professional hospital management and patient interaction platform featuring appointment booking, career applications, and an AI-powered health assistant.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

@@ -1,0 +1,154 @@
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  getDocs, 
+  query, 
+  orderBy, 
+  doc, 
+  updateDoc,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { 
+  getStorage, 
+  ref, 
+  uploadBytes, 
+  getDownloadURL 
+} from 'firebase/storage';
+import { 
+  getAuth, 
+  signInWithEmailAndPassword 
+} from 'firebase/auth';
+import { Appointment, JobApplication, ApplicationStatus } from '../types';
+
+const firebaseConfig = {
+  apiKey: process.env.VITE_FIREBASE_API_KEY,
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.VITE_FIREBASE_APP_ID,
+  measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+const auth = getAuth(app);
+
+export const submitContactMessage = async (data: { name: string; email: string; subject: string; message: string }): Promise<boolean> => {
+  try {
+    await addDoc(collection(db, 'contacts'), {
+      ...data,
+      createdAt: serverTimestamp()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error submitting contact:', error);
+    return false;
+  }
+};
+
+export const submitAppointment = async (data: Appointment): Promise<boolean> => {
+  try {
+    await addDoc(collection(db, 'appointments'), {
+      ...data,
+      createdAt: serverTimestamp()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error submitting appointment:', error);
+    return false;
+  }
+};
+
+export const submitJobApplication = async (data: JobApplication): Promise<boolean> => {
+  try {
+    let passportPhotoUrl = '';
+    let cvUrl = '';
+
+    if (data.passportPhoto instanceof File) {
+      const photoRef = ref(storage, `applications/photos/${Date.now()}_${data.passportPhoto.name}`);
+      const photoSnapshot = await uploadBytes(photoRef, data.passportPhoto);
+      passportPhotoUrl = await getDownloadURL(photoSnapshot.ref);
+    }
+
+    if (data.cv instanceof File) {
+      const cvRef = ref(storage, `applications/cvs/${Date.now()}_${data.cv.name}`);
+      const cvSnapshot = await uploadBytes(cvRef, data.cv);
+      cvUrl = await getDownloadURL(cvSnapshot.ref);
+    }
+
+    await addDoc(collection(db, 'applications'), {
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone,
+      position: data.position,
+      yearsOfExperience: data.yearsOfExperience,
+      passportPhoto: passportPhotoUrl,
+      cv: cvUrl,
+      status: 'Pending',
+      createdAt: serverTimestamp()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error submitting application:', error);
+    return false;
+  }
+};
+
+export const fetchAppointments = async (): Promise<Appointment[]> => {
+  try {
+    const q = query(collection(db, 'appointments'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ 
+      id: d.id, 
+      ...d.data(),
+      createdAt: d.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+    } as Appointment));
+  } catch (error) {
+    console.error('Error fetching appointments:', error);
+    return [];
+  }
+};
+
+export const fetchApplications = async (): Promise<JobApplication[]> => {
+  try {
+    const q = query(collection(db, 'applications'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ 
+      id: d.id, 
+      ...d.data(),
+      createdAt: d.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+    } as JobApplication));
+  } catch (error) {
+    console.error('Error fetching applications:', error);
+    return [];
+  }
+};
+
+export const updateApplicationStatus = async (id: string, status: ApplicationStatus, approvalDetails?: any): Promise<boolean> => {
+  try {
+    const appRef = doc(db, 'applications', id);
+    const updateData: any = { status };
+    if (approvalDetails) {
+      updateData.approvalDetails = approvalDetails;
+    }
+    await updateDoc(appRef, updateData);
+    return true;
+  } catch (error) {
+    console.error('Error updating status:', error);
+    return false;
+  }
+};
+
+export const loginAdmin = async (email: string, pass: string): Promise<boolean> => {
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+    return true;
+  } catch (error) {
+    console.error('Login error:', error);
+    return false;
+  }
+};
