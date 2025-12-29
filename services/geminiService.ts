@@ -1,12 +1,19 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize GoogleGenAI with process.env.API_KEY directly as a named parameter.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+let ai: GoogleGenAI | null = null;
+
+if (apiKey) {
+  ai = new GoogleGenAI({ apiKey });
+}
 
 export const getHealthAdvice = async (userPrompt: string): Promise<string> => {
+  if (!ai) {
+    return "The AI Health Assistant is currently unavailable. Please contact a healthcare professional for medical advice.";
+  }
+  
   try {
-    // Use ai.models.generateContent to query GenAI with both model and contents.
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: userPrompt,
@@ -16,7 +23,6 @@ export const getHealthAdvice = async (userPrompt: string): Promise<string> => {
       },
     });
 
-    // Directly access the .text property from the GenerateContentResponse object.
     return response.text || "I couldn't generate a response. Please try again or contact a doctor.";
   } catch (error) {
     console.error("Gemini Error:", error);
