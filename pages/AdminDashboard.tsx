@@ -75,22 +75,34 @@ const AdminDashboard: React.FC = () => {
     setIsApprovalModalOpen(true);
   };
 
+  const [approvalMessage, setApprovalMessage] = useState('');
+
   const handleApprove = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedApp) return;
 
     setSubmitting(true);
+    setApprovalMessage('');
+    
     // 1. Update Firestore
     const success = await updateApplicationStatus(selectedApp.id!, 'Approved', approvalForm);
     
     if (success) {
       // 2. Send Email Notification
-      await sendApprovalEmail(selectedApp, approvalForm);
+      const emailResult = await sendApprovalEmail(selectedApp, approvalForm);
+      
+      // Show email status message
+      setApprovalMessage(emailResult.message);
       
       // 3. Reset and Refresh
-      setIsApprovalModalOpen(false);
-      setSelectedApp(null);
-      await loadData();
+      setTimeout(async () => {
+        setIsApprovalModalOpen(false);
+        setSelectedApp(null);
+        setApprovalMessage('');
+        await loadData();
+      }, 1500);
+    } else {
+      setApprovalMessage('Failed to update application status');
     }
     setSubmitting(false);
   };
@@ -308,6 +320,12 @@ const AdminDashboard: React.FC = () => {
               </div>
               <p className="opacity-90">Review and finalize employment for {selectedApp.fullName}</p>
             </div>
+
+            {approvalMessage && (
+              <div className={`p-4 border-b ${approvalMessage.includes('success') || approvalMessage.includes('sent') ? 'bg-teal-50 text-teal-700 border-teal-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
+                {approvalMessage}
+              </div>
+            )}
 
             <form onSubmit={handleApprove} className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-6">
