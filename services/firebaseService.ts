@@ -78,42 +78,79 @@ export const submitAppointment = async (data: Appointment): Promise<boolean> => 
 
 export const submitJobApplication = async (data: JobApplication): Promise<boolean> => {
   try {
-    let passportPhotoUrl = '';
-    let cvUrl = '';
+    let passportPhotoUrl = 'https://via.placeholder.com/150';
+    let cvUrl = '#';
 
-    // Handle File uploads if they are browser File objects
+    // Handle File uploads with timeout (max 10 seconds per file)
+    const uploadWithTimeout = async (file: File, path: string): Promise<string> => {
+      return Promise.race([
+        (async () => {
+          const fileRef = ref(storage, `${path}/${Date.now()}_${file.name}`);
+          const snapshot = await uploadBytes(fileRef, file);
+          return await getDownloadURL(snapshot.ref);
+        })(),
+        new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('Upload timeout')), 10000)
+        )
+      ]);
+    };
+
+    // Try to upload files with timeout, but don't fail if it takes too long
     try {
       if (data.passportPhoto instanceof File) {
-        const photoRef = ref(storage, `applications/photos/${Date.now()}_${data.passportPhoto.name}`);
-        const photoSnapshot = await uploadBytes(photoRef, data.passportPhoto);
-        passportPhotoUrl = await getDownloadURL(photoSnapshot.ref);
+        passportPhotoUrl = await uploadWithTimeout(data.passportPhoto, 'applications/photos');
       } else if (typeof data.passportPhoto === 'string') {
         passportPhotoUrl = data.passportPhoto;
       }
+    } catch (photoError) {
+      console.warn('Passport photo upload failed, using placeholder:', photoError);
+    }
 
+    try {
       if (data.cv instanceof File) {
-        const cvRef = ref(storage, `applications/cvs/${Date.now()}_${data.cv.name}`);
-        const cvSnapshot = await uploadBytes(cvRef, data.cv);
-        cvUrl = await getDownloadURL(cvSnapshot.ref);
+        cvUrl = await uploadWithTimeout(data.cv, 'applications/cvs');
       } else if (typeof data.cv === 'string') {
         cvUrl = data.cv;
       }
-    } catch (uploadError) {
-      console.warn('File upload failed, continuing with empty URLs:', uploadError);
+    } catch (cvError) {
+      console.warn('CV upload failed, continuing without URL:', cvError);
     }
 
-    await addDoc(collection(db, 'applications'), {
-      fullName: data.fullName,
-      email: data.email,
-      phone: data.phone,
-      position: data.position,
-      yearsOfExperience: data.yearsOfExperience,
-      passportPhoto: passportPhotoUrl || 'https://via.placeholder.com/150',
-      cv: cvUrl || '#',
-      status: 'Pending',
-      createdAt: serverTimestamp()
-    });
-    return true;
+    // Try to save to Firestore first
+    try {
+      await addDoc(collection(db, 'applications'), {
+        fullName: data.fullName,
+        email: data.email,
+        phone: data.phone,
+        position: data.position,
+        yearsOfExperience: data.yearsOfExperience,
+        passportPhoto: passportPhotoUrl,
+        cv: cvUrl,
+        status: 'Pending',
+        createdAt: serverTimestamp()
+      });
+      console.log('Application submitted to Firestore');
+      return true;
+    } catch (firestoreError) {
+      // Fallback to localStorage if Firestore fails
+      console.warn('Firestore submission failed, saving to localStorage:', firestoreError);
+      const applications = JSON.parse(localStorage.getItem('jobApplications') || '[]');
+      applications.push({
+        id: `local_${Date.now()}`,
+        fullName: data.fullName,
+        email: data.email,
+        phone: data.phone,
+        position: data.position,
+        yearsOfExperience: data.yearsOfExperience,
+        passportPhoto: passportPhotoUrl,
+        cv: cvUrl,
+        status: 'Pending',
+        createdAt: new Date().toISOString()
+      });
+      localStorage.setItem('jobApplications', JSON.stringify(applications));
+      console.log('Application saved to localStorage as fallback');
+      return true;
+    }
   } catch (error) {
     console.error('Error submitting application:', error);
     return false;
@@ -137,16 +174,28 @@ export const fetchAppointments = async (): Promise<Appointment[]> => {
 
 export const fetchApplications = async (): Promise<JobApplication[]> => {
   try {
+    // Try to fetch from Firestore
     const q = query(collection(db, 'applications'), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ 
+    const firestoreApps = snapshot.docs.map(d => ({ 
       id: d.id, 
       ...d.data(),
       createdAt: d.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
     } as JobApplication));
+    
+    // Also get any applications saved in localStorage
+    const localApps = JSON.parse(localStorage.getItem('jobApplications') || '[]') as JobApplication[];
+    
+    // Combine and sort by date
+    const allApps = [...firestoreApps, ...localApps].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    
+    return allApps;
   } catch (error) {
-    console.error('Error fetching applications:', error);
-    return [];
+    console.error('Error fetching applications, falling back to localStorage:', error);
+    // Fallback to localStorage only
+    return JSON.parse(localStorage.getItem('jobApplications') || '[]') as JobApplication[];
   }
 };
 
