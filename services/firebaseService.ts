@@ -167,13 +167,13 @@ export const updateApplicationStatus = async (id: string, status: ApplicationSta
 
 export const loginAdmin = async (email: string, pass: string): Promise<boolean> => {
   // Simple hardcoded admin credentials (non-Firebase)
-  const validUsername = 'luckymmc';
+  const validEmail = 'samuellucky242@hotmail.com';
   const validPassword = '081648Al@';
   
-  // Allow login with either username or email format
-  const isValidUsername = (email === validUsername || email === 'luckymmc@luminahealth.com') && pass === validPassword;
+  // Check email and password
+  const isValidUser = email === validEmail && pass === validPassword;
   
-  if (isValidUsername) {
+  if (isValidUser) {
     return true;
   }
   

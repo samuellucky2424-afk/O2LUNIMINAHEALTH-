@@ -11,7 +11,7 @@ All credentials are loaded from `.env` file and ready to use.
 
 ### 1. Access Admin Dashboard
 - Navigate to: `http://localhost:5000/#/admin/login`
-- **Username**: `luckymmc`
+- **Email**: `samuellucky242@hotmail.com`
 - **Password**: `081648Al@`
 - Click **Sign In to Dashboard**
 
