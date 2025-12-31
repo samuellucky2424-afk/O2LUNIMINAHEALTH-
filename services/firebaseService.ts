@@ -166,19 +166,22 @@ export const updateApplicationStatus = async (id: string, status: ApplicationSta
 };
 
 export const loginAdmin = async (email: string, pass: string): Promise<boolean> => {
-  // Simple hardcoded admin credentials (non-Firebase)
-  const validEmail = 'samuellucky242@hotmail.com';
-  const validPassword = '081648Al@';
-  
-  // Check email and password
-  const isValidUser = email === validEmail && pass === validPassword;
-  
-  if (isValidUser) {
+  try {
+    // Use real Firebase authentication
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    console.log('Admin login successful:', userCredential.user.email);
     return true;
+  } catch (error: any) {
+    console.error('Login error:', error.message);
+    if (error.code === 'auth/user-not-found') {
+      console.error('User account not found. Please create an account in Firebase Console.');
+    } else if (error.code === 'auth/wrong-password') {
+      console.error('Incorrect password.');
+    } else if (error.code === 'auth/invalid-email') {
+      console.error('Invalid email format.');
+    }
+    return false;
   }
-  
-  console.error('Login error: Invalid credentials');
-  return false;
 };
 
 export const updateHomepageContent = async (content: any): Promise<boolean> => {
