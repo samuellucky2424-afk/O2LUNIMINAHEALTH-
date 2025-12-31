@@ -22,6 +22,18 @@ import {
 } from 'firebase/auth';
 import { Appointment, JobApplication, ApplicationStatus } from '../types';
 
+// Helper function to convert File to base64
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result); // Returns data:image/jpeg;base64,... or data:application/pdf;base64,...
+    };
+    reader.onerror = reject;
+  });
+};
+
 // Safe environment variable access for different environments
 const getEnv = (key: string) => {
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
@@ -78,42 +90,41 @@ export const submitAppointment = async (data: Appointment): Promise<boolean> => 
 
 export const submitJobApplication = async (data: JobApplication): Promise<boolean> => {
   try {
-    let passportPhotoUrl = 'https://via.placeholder.com/150';
-    let cvUrl = '#';
+    let passportPhotoBase64 = 'data:image/jpeg;base64,'; // Default placeholder
+    let cvBase64 = 'data:application/pdf;base64,'; // Default placeholder
 
-    // Handle File uploads with timeout (max 10 seconds per file)
-    const uploadWithTimeout = async (file: File, path: string): Promise<string> => {
+    // Convert files to base64 with timeout (max 5 seconds per file)
+    const fileToBase64WithTimeout = async (file: File): Promise<string> => {
       return Promise.race([
-        (async () => {
-          const fileRef = ref(storage, `${path}/${Date.now()}_${file.name}`);
-          const snapshot = await uploadBytes(fileRef, file);
-          return await getDownloadURL(snapshot.ref);
-        })(),
+        fileToBase64(file),
         new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('Upload timeout')), 10000)
+          setTimeout(() => reject(new Error('Conversion timeout')), 5000)
         )
       ]);
     };
 
-    // Try to upload files with timeout, but don't fail if it takes too long
+    // Convert passport photo to base64
     try {
       if (data.passportPhoto instanceof File) {
-        passportPhotoUrl = await uploadWithTimeout(data.passportPhoto, 'applications/photos');
+        passportPhotoBase64 = await fileToBase64WithTimeout(data.passportPhoto);
+        console.log('Passport photo converted to base64 (size: ' + passportPhotoBase64.length + ' bytes)');
       } else if (typeof data.passportPhoto === 'string') {
-        passportPhotoUrl = data.passportPhoto;
+        passportPhotoBase64 = data.passportPhoto;
       }
     } catch (photoError) {
-      console.warn('Passport photo upload failed, using placeholder:', photoError);
+      console.warn('Passport photo conversion failed, using placeholder:', photoError);
     }
 
+    // Convert CV to base64
     try {
       if (data.cv instanceof File) {
-        cvUrl = await uploadWithTimeout(data.cv, 'applications/cvs');
+        cvBase64 = await fileToBase64WithTimeout(data.cv);
+        console.log('CV converted to base64 (size: ' + cvBase64.length + ' bytes)');
       } else if (typeof data.cv === 'string') {
-        cvUrl = data.cv;
+        cvBase64 = data.cv;
       }
     } catch (cvError) {
-      console.warn('CV upload failed, continuing without URL:', cvError);
+      console.warn('CV conversion failed, continuing without data:', cvError);
     }
 
     // Try to save to Firestore first
@@ -124,12 +135,12 @@ export const submitJobApplication = async (data: JobApplication): Promise<boolea
         phone: data.phone,
         position: data.position,
         yearsOfExperience: data.yearsOfExperience,
-        passportPhoto: passportPhotoUrl,
-        cv: cvUrl,
+        passportPhotoBase64: passportPhotoBase64, // Store base64 string
+        cvBase64: cvBase64, // Store base64 string
         status: 'Pending',
         createdAt: serverTimestamp()
       });
-      console.log('Application submitted to Firestore');
+      console.log('Application submitted to Firestore with base64 files');
       return true;
     } catch (firestoreError) {
       // Fallback to localStorage if Firestore fails
@@ -142,13 +153,13 @@ export const submitJobApplication = async (data: JobApplication): Promise<boolea
         phone: data.phone,
         position: data.position,
         yearsOfExperience: data.yearsOfExperience,
-        passportPhoto: passportPhotoUrl,
-        cv: cvUrl,
+        passportPhotoBase64: passportPhotoBase64, // Store base64 string
+        cvBase64: cvBase64, // Store base64 string
         status: 'Pending',
         createdAt: new Date().toISOString()
       });
       localStorage.setItem('jobApplications', JSON.stringify(applications));
-      console.log('Application saved to localStorage as fallback');
+      console.log('Application saved to localStorage with base64 files');
       return true;
     }
   } catch (error) {
