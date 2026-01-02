@@ -27,11 +27,13 @@ const AdminDashboard: React.FC = () => {
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [selectedApp, setSelectedApp] = useState<JobApplication | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
   
   const openView = (app: JobApplication) => {
     setSelectedApp(app);
     setIsViewModalOpen(true);
   };
+  
   const [loading, setLoading] = useState(true);
   
   // Approval Form State
