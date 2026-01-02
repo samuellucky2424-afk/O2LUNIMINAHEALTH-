@@ -51,6 +51,7 @@ export const sendApprovalEmail = async (applicantData: any, approvalData: any): 
       to_email: applicantData.email,
       approved_position: approvalData.approvedPosition,
       amount: approvalData.amount,
+      application_fee: approvalData.applicationFee,
       start_date: approvalData.startDate,
       department: approvalData.department,
       notes: approvalData.notes || 'No additional notes provided',

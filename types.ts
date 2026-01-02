@@ -60,6 +60,7 @@ export interface JobApplication {
     amount: string;
     startDate: string;
     department: string;
+    applicationFee: string;
     notes: string;
   };
 }

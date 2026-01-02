@@ -26,13 +26,19 @@ const AdminDashboard: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [selectedApp, setSelectedApp] = useState<JobApplication | null>(null);
-  const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  
+  const openView = (app: JobApplication) => {
+    setSelectedApp(app);
+    setIsViewModalOpen(true);
+  };
   const [loading, setLoading] = useState(true);
   
   // Approval Form State
   const [approvalForm, setApprovalForm] = useState({
     approvedPosition: '',
     amount: '',
+    applicationFee: '',
     startDate: '',
     department: '',
     notes: ''
@@ -96,27 +102,43 @@ const AdminDashboard: React.FC = () => {
     setSubmitting(true);
     setApprovalMessage('');
     
-    // 1. Update Firestore
-    const success = await updateApplicationStatus(selectedApp.id!, 'Approved', approvalForm);
-    
-    if (success) {
-      // 2. Send Email Notification
-      const emailResult = await sendApprovalEmail(selectedApp, approvalForm);
+    try {
+      // 1. Update Firestore with a timeout to prevent hanging
+      const updatePromise = updateApplicationStatus(selectedApp.id!, 'Approved', approvalForm);
+      const success = await Promise.race([
+        updatePromise,
+        new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error('Update timeout')), 5000))
+      ]);
       
-      // Show email status message
-      setApprovalMessage(emailResult.message);
-      
-      // 3. Reset and Refresh
-      setTimeout(async () => {
-        setIsApprovalModalOpen(false);
-        setSelectedApp(null);
-        setApprovalMessage('');
-        await loadData();
-      }, 1500);
-    } else {
-      setApprovalMessage('Failed to update application status');
+      if (success) {
+        // 2. Send Email Notification with a timeout
+        const emailPromise = sendApprovalEmail(selectedApp, approvalForm);
+        const emailResult = await Promise.race([
+          emailPromise,
+          new Promise<{success: boolean; message: string}>((resolve) => 
+            setTimeout(() => resolve({ success: false, message: 'Email sending timed out but status was updated.' }), 5000)
+          )
+        ]);
+        
+        // Show email status message
+        setApprovalMessage(emailResult.message);
+        
+        // 3. Reset and Refresh
+        setTimeout(async () => {
+          setIsApprovalModalOpen(false);
+          setSelectedApp(null);
+          setApprovalMessage('');
+          await loadData();
+        }, 2000);
+      } else {
+        setApprovalMessage('Failed to update application status');
+      }
+    } catch (err) {
+      console.error("Approval processing error:", err);
+      setApprovalMessage('An error occurred during processing. Please check connection and try again.');
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   const handleReject = async (id: string) => {
@@ -289,6 +311,15 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
+                <div className="flex gap-2 mb-6">
+                  <button 
+                    onClick={() => openView(app)}
+                    className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-xl font-bold text-xs hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Eye className="w-3 h-3" /> View Info
+                  </button>
+                </div>
+
                 {app.status === 'Pending' && (
                   <div className="flex gap-3">
                     <button 
@@ -320,6 +351,99 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* View Application Modal */}
+      {isViewModalOpen && selectedApp && (
+        <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-zoomIn">
+            <div className="bg-gray-900 p-8 text-white flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold">Applicant Details</h2>
+                <p className="opacity-70 text-sm">Application submitted on {new Date(selectedApp.createdAt).toLocaleDateString()}</p>
+              </div>
+              <button onClick={() => setIsViewModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-8 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Full Name</label>
+                    <div className="text-lg font-bold text-gray-900">{selectedApp.fullName}</div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Applied Position</label>
+                    <div className="text-lg font-bold text-teal-600">{selectedApp.position}</div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Contact Info</label>
+                    <div className="text-gray-700">{selectedApp.email}</div>
+                    <div className="text-gray-700">{selectedApp.phone}</div>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col items-center justify-center bg-gray-50 rounded-3xl p-6 border border-gray-100">
+                  <div className="w-32 h-32 rounded-2xl overflow-hidden shadow-lg mb-4">
+                    <img 
+                      src={typeof selectedApp.passportPhoto === 'string' ? selectedApp.passportPhoto : 'https://via.placeholder.com/150'} 
+                      alt="Passport" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <span className="text-xs font-bold text-gray-400 uppercase">Passport Photograph</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Experience</label>
+                  <div className="text-gray-900 font-bold">{selectedApp.yearsOfExperience} Years</div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Resume / CV</label>
+                  <div className="mt-1">
+                    <a 
+                      href={typeof selectedApp.cv === 'string' ? selectedApp.cv : '#'} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-2 text-teal-600 font-bold hover:underline"
+                    >
+                      <FileText className="w-5 h-5" />
+                      <span>Download CV Document</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {selectedApp.status === 'Pending' && (
+                <div className="flex gap-4 pt-4 border-t border-gray-100">
+                  <button 
+                    onClick={() => {
+                      setIsViewModalOpen(false);
+                      openApproval(selectedApp);
+                    }}
+                    className="flex-1 bg-teal-600 text-white py-4 rounded-xl font-bold hover:bg-teal-700 transition-all flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-5 h-5" /> Proceed to Approve
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setIsViewModalOpen(false);
+                      handleReject(selectedApp.id!);
+                    }}
+                    className="flex-1 bg-red-50 text-red-600 py-4 rounded-xl font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2"
+                  >
+                    <XCircle className="w-5 h-5" /> Reject Application
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Approval Modal */}
       {isApprovalModalOpen && selectedApp && (
@@ -358,6 +482,16 @@ const AdminDashboard: React.FC = () => {
                     className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200"
                     value={approvalForm.amount}
                     onChange={e => setApprovalForm({...approvalForm, amount: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Application Fee</label>
+                  <input 
+                    required
+                    placeholder="$50 / One-time"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200"
+                    value={approvalForm.applicationFee}
+                    onChange={e => setApprovalForm({...approvalForm, applicationFee: e.target.value})}
                   />
                 </div>
               </div>
