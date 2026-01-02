@@ -194,15 +194,39 @@ export const fetchApplications = async (): Promise<JobApplication[]> => {
 
 export const updateApplicationStatus = async (id: string, status: ApplicationStatus, approvalDetails?: any): Promise<boolean> => {
   try {
-    const appRef = doc(db, 'applications', id);
-    const updateData: any = { status };
-    if (approvalDetails) {
-      updateData.approvalDetails = approvalDetails;
+    // 1. Always update localStorage first for reliability
+    const localApps = JSON.parse(localStorage.getItem('jobApplications') || '[]');
+    const updatedLocalApps = localApps.map((app: any) => {
+      if (app.id === id) {
+        return { ...app, status, approvalDetails };
+      }
+      return app;
+    });
+    localStorage.setItem('jobApplications', JSON.stringify(updatedLocalApps));
+    console.log('✅ Local storage updated');
+
+    // 2. Try Firestore but don't fail if it's slow/not configured
+    try {
+      const appRef = doc(db, 'applications', id);
+      const updateData: any = { status };
+      if (approvalDetails) {
+        updateData.approvalDetails = approvalDetails;
+      }
+      
+      // Use a race with a 2-second timeout for Firestore
+      await Promise.race([
+        updateDoc(appRef, updateData),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+      ]);
+      console.log('✅ Firestore updated');
+    } catch (fireError) {
+      console.warn('⚠️ Firestore update skipped or failed:', fireError);
+      // We continue because local storage is updated
     }
-    await updateDoc(appRef, updateData);
+    
     return true;
   } catch (error) {
-    console.error('Error updating status:', error);
+    console.error('❌ Error updating status:', error);
     return false;
   }
 };

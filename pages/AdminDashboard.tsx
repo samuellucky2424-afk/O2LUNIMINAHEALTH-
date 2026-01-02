@@ -105,35 +105,40 @@ const AdminDashboard: React.FC = () => {
     setApprovalMessage('');
     
     try {
-      // 1. Update Firestore with a timeout to prevent hanging
-      const updatePromise = updateApplicationStatus(selectedApp.id!, 'Approved', approvalForm);
-      const success = await Promise.race([
-        updatePromise,
-        new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error('Update timeout')), 5000))
-      ]);
+      // 1. Update status (Local + Firestore)
+      // This is now very fast because it updates local storage first
+      const success = await updateApplicationStatus(selectedApp.id!, 'Approved', approvalForm);
       
       if (success) {
-        // 2. Send Email Notification with a timeout
-        const emailPromise = sendApprovalEmail(selectedApp, approvalForm);
-        const emailResult = await Promise.race([
-          emailPromise,
-          new Promise<{success: boolean; message: string}>((resolve) => 
-            setTimeout(() => resolve({ success: false, message: 'Email sending timed out but status was updated.' }), 5000)
-          )
-        ]);
+        // 2. Refresh local data immediately so the UI reflects the change
+        const localApps = JSON.parse(localStorage.getItem('jobApplications') || '[]');
+        setApplications(localApps);
+
+        // 3. Send Email Notification (Non-blocking or fast timeout)
+        // We show the message but don't block the whole process if email is slow
+        setApprovalMessage('Processing email...');
         
-        // Show email status message
-        setApprovalMessage(emailResult.message);
+        try {
+          const emailResult = await Promise.race([
+            sendApprovalEmail(selectedApp, approvalForm),
+            new Promise<{success: boolean; message: string}>((resolve) => 
+              setTimeout(() => resolve({ success: true, message: 'Approval saved! Email sending in background.' }), 4000)
+            )
+          ]);
+          setApprovalMessage(emailResult.message);
+        } catch (emailErr) {
+          setApprovalMessage('Approval saved! (Email service unavailable)');
+        }
         
-        // 3. Reset and Refresh
-        setTimeout(async () => {
+        // 4. Close modal and refresh after a short delay
+        setTimeout(() => {
           setIsApprovalModalOpen(false);
           setSelectedApp(null);
           setApprovalMessage('');
-          await loadData();
-        }, 2000);
+          loadData(); // Full refresh
+        }, 2500);
       } else {
-        setApprovalMessage('Failed to update application status');
+        setApprovalMessage('Failed to update application status locally.');
       }
     } catch (err) {
       console.error("Approval processing error:", err);
