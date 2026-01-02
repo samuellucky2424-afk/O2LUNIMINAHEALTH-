@@ -65,6 +65,8 @@ const CareersPage: React.FC = () => {
       createdAt: new Date().toISOString()
     };
 
+    console.log('Submitting application with email:', formData.email);
+
     try {
       // Use a timeout - max 3 seconds to submit
       const result = await Promise.race([

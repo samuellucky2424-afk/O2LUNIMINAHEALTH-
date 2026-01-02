@@ -28,12 +28,6 @@ const AdminDashboard: React.FC = () => {
   const [selectedApp, setSelectedApp] = useState<JobApplication | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
-  
-  const openView = (app: JobApplication) => {
-    setSelectedApp(app);
-    setIsViewModalOpen(true);
-  };
-  
   const [loading, setLoading] = useState(true);
   
   // Approval Form State
@@ -89,7 +83,14 @@ const AdminDashboard: React.FC = () => {
     navigate('/admin/login');
   };
 
+  const openView = (app: JobApplication) => {
+    console.log('Viewing applicant:', app.fullName, 'Email:', app.email);
+    setSelectedApp(app);
+    setIsViewModalOpen(true);
+  };
+  
   const openApproval = (app: JobApplication) => {
+    console.log('Approving applicant:', app.fullName, 'Email:', app.email);
     setSelectedApp(app);
     setApprovalForm({
       ...approvalForm,
