@@ -61,6 +61,9 @@ export interface JobApplication {
     startDate: string;
     department: string;
     applicationFee: string;
+    fee_amount: string;
+    payment_deadline: string;
+    payment_method: string;
     notes: string;
   };
 }

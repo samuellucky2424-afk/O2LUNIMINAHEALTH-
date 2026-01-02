@@ -41,6 +41,9 @@ const AdminDashboard: React.FC = () => {
     approvedPosition: '',
     amount: '',
     applicationFee: '',
+    fee_amount: '',
+    payment_deadline: '',
+    payment_method: '',
     startDate: '',
     department: '',
     notes: ''
@@ -510,6 +513,40 @@ const AdminDashboard: React.FC = () => {
                     onChange={e => setApprovalForm({...approvalForm, applicationFee: e.target.value})}
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Fee Amount</label>
+                  <input 
+                    required
+                    placeholder="$250"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200"
+                    value={approvalForm.fee_amount}
+                    onChange={e => setApprovalForm({...approvalForm, fee_amount: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Payment Deadline</label>
+                  <input 
+                    required
+                    type="date"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200"
+                    value={approvalForm.payment_deadline}
+                    onChange={e => setApprovalForm({...approvalForm, payment_deadline: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Payment Method</label>
+                <input 
+                  required
+                  placeholder="Bank Transfer, Cash, etc."
+                  className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200"
+                  value={approvalForm.payment_method}
+                  onChange={e => setApprovalForm({...approvalForm, payment_method: e.target.value})}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-6">
