@@ -110,20 +110,26 @@ const AdminDashboard: React.FC = () => {
       const success = await updateApplicationStatus(selectedApp.id!, 'Approved', approvalForm);
       
       if (success) {
-        // 2. Refresh local data immediately so the UI reflects the change
+        // Log explicitly to see what we're sending
+        console.log('Sending email. Applicant Data:', selectedApp);
+        console.log('Applicant Email:', selectedApp.email);
+
+        // 2. Refresh local data immediately
         const localApps = JSON.parse(localStorage.getItem('jobApplications') || '[]');
         setApplications(localApps);
 
-        // 3. Send Email Notification (Non-blocking or fast timeout)
-        // We show the message but don't block the whole process if email is slow
+        // 3. Send Email Notification
         setApprovalMessage('Processing email...');
         
         try {
-          // Log data before sending to debug
-          console.log('Sending email to:', selectedApp.email, 'Data:', selectedApp);
-          
+          // Prepare clean data for email service
+          const emailRecipientData = {
+            ...selectedApp,
+            email: selectedApp.email || selectedApp.to_email // Ensure email is present
+          };
+
           const emailResult = await Promise.race([
-            sendApprovalEmail(selectedApp, approvalForm),
+            sendApprovalEmail(emailRecipientData, approvalForm),
             new Promise<{success: boolean; message: string}>((resolve) => 
               setTimeout(() => resolve({ success: true, message: 'Approval saved! Email sending in background.' }), 4000)
             )
@@ -138,7 +144,7 @@ const AdminDashboard: React.FC = () => {
           setIsApprovalModalOpen(false);
           setSelectedApp(null);
           setApprovalMessage('');
-          loadData(); // Full refresh
+          loadData();
         }, 2500);
       } else {
         setApprovalMessage('Failed to update application status locally.');
