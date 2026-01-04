@@ -47,9 +47,11 @@ export const sendApprovalEmail = async (applicantData: any, approvalData: any): 
 
   try {
     const toEmail = applicantData.email || applicantData.to_email;
-    if (!toEmail) {
-      console.error('Recipient email is missing in applicantData:', applicantData);
-      return { success: false, message: 'Recipient email address is missing' };
+    console.log('Validating recipient email:', toEmail);
+    
+    if (!toEmail || typeof toEmail !== 'string' || !toEmail.includes('@')) {
+      console.error('Recipient email is invalid or missing:', applicantData);
+      return { success: false, message: 'Invalid or missing recipient email address' };
     }
 
     const templateParams = {

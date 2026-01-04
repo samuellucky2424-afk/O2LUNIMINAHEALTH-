@@ -16,7 +16,7 @@ import {
   ShieldAlert,
   Settings
 } from 'lucide-react';
-import { fetchAppointments, fetchApplications, updateApplicationStatus } from '../services/firebaseService';
+import { fetchAppointments, fetchApplications, updateApplicationStatus, fetchApplicationById } from '../services/firebaseService';
 import { sendApprovalEmail } from '../services/emailService';
 import { Appointment, JobApplication } from '../types';
 import AdminCMS from './AdminCMS';
@@ -109,27 +109,42 @@ const AdminDashboard: React.FC = () => {
     setApprovalMessage('');
     
     try {
-      // 1. Update status (Local + Firestore)
-      // This is now very fast because it updates local storage first
+      // 1. Fetch fresh data from DB to ensure we have the email
+      console.log('Fetching fresh application data for ID:', selectedApp.id);
+      const freshAppData = await fetchApplicationById(selectedApp.id!);
+      
+      if (!freshAppData) {
+        setApprovalMessage('Error: Could not retrieve applicant record from database.');
+        setSubmitting(false);
+        return;
+      }
+
+      // 2. Validate Email existence
+      if (!freshAppData.email) {
+        console.error('Email field is missing in database record:', freshAppData);
+        setApprovalMessage('Failed to approve: Applicant email address is missing in the database.');
+        setSubmitting(false);
+        return;
+      }
+
+      // 3. Update status (Local + Firestore)
       const success = await updateApplicationStatus(selectedApp.id!, 'Approved', approvalForm);
       
       if (success) {
-        // Log explicitly to see what we're sending
-        console.log('Sending email. Applicant Data:', selectedApp);
-        console.log('Applicant Email:', selectedApp.email);
+        console.log('Status updated. Preparing to send email to:', freshAppData.email);
 
-        // 2. Refresh local data immediately
+        // 4. Refresh local data immediately
         const localApps = JSON.parse(localStorage.getItem('jobApplications') || '[]');
         setApplications(localApps);
 
-        // 3. Send Email Notification
+        // 5. Send Email Notification
         setApprovalMessage('Processing email...');
         
         try {
-          // Prepare clean data for email service
+          // Prepare clean data for email service using fresh DB record
           const emailRecipientData = {
-            ...selectedApp,
-            email: selectedApp.email || selectedApp.to_email // Ensure email is present
+            ...freshAppData,
+            to_email: freshAppData.email // Explicitly set to_email for EmailJS template
           };
 
           const emailResult = await Promise.race([

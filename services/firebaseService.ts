@@ -231,6 +231,38 @@ export const updateApplicationStatus = async (id: string, status: ApplicationSta
   }
 };
 
+export const fetchApplicationById = async (id: string): Promise<JobApplication | null> => {
+  try {
+    // 1. Check local storage first
+    const localApps = JSON.parse(localStorage.getItem('jobApplications') || '[]');
+    const localApp = localApps.find((app: any) => app.id === id);
+    if (localApp) {
+      console.log('✅ Found application in local storage');
+      return localApp;
+    }
+
+    // 2. Try Firestore
+    const appRef = doc(db, 'applications', id);
+    const docSnap = await Promise.race([
+      getDocs(query(collection(db, 'applications'))).then(snapshot => {
+        const found = snapshot.docs.find(d => d.id === id);
+        return found ? found.data() : null;
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+    ]);
+
+    if (docSnap) {
+      console.log('✅ Found application in Firestore');
+      return { id, ...docSnap } as JobApplication;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('❌ Error fetching application by ID:', error);
+    return null;
+  }
+};
+
 export const loginAdmin = async (email: string, pass: string): Promise<boolean> => {
   // Admin credentials from environment variables for development
   const adminEmail = 'samuellucky242@hotmail.com';
