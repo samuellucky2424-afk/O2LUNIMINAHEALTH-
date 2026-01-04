@@ -253,7 +253,8 @@ export const fetchApplicationById = async (id: string): Promise<JobApplication |
 
     if (docSnap) {
       console.log('✅ Found application in Firestore');
-      return { id, ...docSnap } as JobApplication;
+      const data = docSnap as any;
+      return { id, ...data } as JobApplication;
     }
 
     return null;
